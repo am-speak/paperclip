@@ -1,10 +1,39 @@
 import type { AdapterModel } from "./types.js";
 import { models as codexFallbackModels } from "@paperclipai/adapter-codex-local";
 import { readConfigFile } from "../config-file.js";
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
 
 const OPENAI_MODELS_ENDPOINT = "https://api.openai.com/v1/models";
 const OPENAI_MODELS_TIMEOUT_MS = 5000;
 const OPENAI_MODELS_CACHE_TTL_MS = 60_000;
+
+function codexHomeDir(): string {
+  return process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
+}
+
+/** Reads models from Codex's own models_cache.json (populated by ChatGPT auth). */
+async function readCodexModelsCache(): Promise<AdapterModel[]> {
+  try {
+    const file = path.join(codexHomeDir(), "models_cache.json");
+    const raw = JSON.parse(await fs.promises.readFile(file, "utf-8"));
+    const entries = Array.isArray(raw) ? raw : [];
+    const models: AdapterModel[] = [];
+    for (const entry of entries) {
+      if (typeof entry !== "object" || entry === null) continue;
+      const id = entry.slug || entry.id;
+      const label = entry.name || entry.label || id;
+      if (typeof id !== "string" || id.trim().length === 0) continue;
+      // Only include visible/selectable models
+      if (entry.visibility === "hidden") continue;
+      models.push({ id, label: typeof label === "string" ? label : id });
+    }
+    return models;
+  } catch {
+    return [];
+  }
+}
 
 let cached: { keyFingerprint: string; expiresAt: number; models: AdapterModel[] } | null = null;
 
@@ -71,6 +100,16 @@ async function fetchOpenAiModels(apiKey: string): Promise<AdapterModel[]> {
 }
 
 async function loadCodexModels(options?: { forceRefresh?: boolean }): Promise<AdapterModel[]> {
+  // 1. Read from Codex's models_cache.json (highest priority, no network/credentials needed).
+  //    Codex populates this file during interactive sessions via ChatGPT auth.
+  //    Reading the file on every call is cheap (local I/O), so forceRefresh is intentionally
+  //    a no-op here — the caller gets the latest file contents either way.
+  const fromCache = await readCodexModelsCache();
+  if (fromCache.length > 0) {
+    return mergedWithFallback(fromCache);
+  }
+
+  // 2. Fall through to OpenAI API key path (for users with OPENAI_API_KEY set).
   const forceRefresh = options?.forceRefresh === true;
   const apiKey = resolveOpenAiApiKey();
   const fallback = dedupeModels(codexFallbackModels);
@@ -93,6 +132,7 @@ async function loadCodexModels(options?: { forceRefresh?: boolean }): Promise<Ad
     return merged;
   }
 
+  // 3. If all else fails, return stale cache or static fallback list.
   if (cached && cached.keyFingerprint === keyFingerprint && cached.models.length > 0) {
     return cached.models;
   }
