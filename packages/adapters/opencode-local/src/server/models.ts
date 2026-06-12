@@ -21,7 +21,7 @@ function resolveOpenCodeCommand(input: unknown): string {
 
 const discoveryCache = new Map<string, { expiresAt: number; models: AdapterModel[] }>();
 const VOLATILE_ENV_KEY_PREFIXES = ["PAPERCLIP_", "npm_", "NPM_"] as const;
-const VOLATILE_ENV_KEY_EXACT = new Set(["PWD", "OLDPWD", "SHLVL", "_", "TERM_SESSION_ID", "HOME"]);
+const VOLATILE_ENV_KEY_EXACT = new Set(["PWD", "OLDPWD", "SHLVL", "_", "TERM_SESSION_ID", "HOME", "USERPROFILE"]);
 
 function dedupeModels(models: AdapterModel[]): AdapterModel[] {
   const seen = new Set<string>();
@@ -50,15 +50,21 @@ function firstNonEmptyLine(text: string): string {
   );
 }
 
+function stripAnsi(text: string): string {
+  return text.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, "");
+}
+
 function parseModelsOutput(stdout: string): AdapterModel[] {
+  const cleanStdout = stripAnsi(stdout);
   const parsed: AdapterModel[] = [];
-  for (const raw of stdout.split(/\r?\n/)) {
+  for (const raw of cleanStdout.split(/\r?\n/)) {
     const line = raw.trim();
     if (!line) continue;
-    const firstToken = line.split(/\s+/)[0]?.trim() ?? "";
-    if (!firstToken.includes("/")) continue;
-    const provider = firstToken.slice(0, firstToken.indexOf("/")).trim();
-    const model = firstToken.slice(firstToken.indexOf("/") + 1).trim();
+    // Match provider/model format anywhere in the line (ignore list markers, ANSI, etc.)
+    const match = line.match(/([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_.-]+)/);
+    if (!match) continue;
+    const provider = match[1].trim();
+    const model = match[2].trim();
     if (!provider || !model) continue;
     parsed.push({ id: `${provider}/${model}`, label: `${provider}/${model}` });
   }
@@ -120,8 +126,20 @@ export async function discoverOpenCodeModels(input: {
     // /etc/passwd entry (e.g. `docker run --user 1234` with a minimal
     // image). Fall back to process.env.HOME.
   }
+  // On Windows, sync USERPROFILE with HOME so child processes can find credentials.
+  const homeOverride = resolvedHome ? { HOME: resolvedHome } : {};
+  const userProfileOverride = process.platform === "win32" && resolvedHome
+    ? { USERPROFILE: resolvedHome }
+    : {};
+
   // Prevent OpenCode from writing an opencode.json into the working directory.
-  const runtimeEnv = normalizeEnv(ensurePathInEnv({ ...process.env, ...env, ...(resolvedHome ? { HOME: resolvedHome } : {}), OPENCODE_DISABLE_PROJECT_CONFIG: "true" }));
+  const runtimeEnv = normalizeEnv(ensurePathInEnv({
+    ...process.env,
+    ...env,
+    ...homeOverride,
+    ...userProfileOverride,
+    OPENCODE_DISABLE_PROJECT_CONFIG: "true",
+  }));
 
   const result = await runChildProcess(
     `opencode-models-${Date.now()}-${Math.random().toString(16).slice(2)}`,
