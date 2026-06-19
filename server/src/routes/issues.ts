@@ -2081,6 +2081,25 @@ export function issueRoutes(
       };
     }
     Object.assign(updateFields, transition.patch);
+
+    // AMS-5120: Enforce first-class blocker IDs when transitioning to blocked status
+    const targetStatus = updateFields.status as string | undefined;
+    if (targetStatus === "blocked" && existing.status !== "blocked" && req.actor.type === "agent") {
+      let effectiveBlockers: string[];
+      if (Array.isArray(req.body.blockedByIssueIds)) {
+        effectiveBlockers = req.body.blockedByIssueIds;
+      } else {
+        const blockerRelations = existingRelations ?? await svc.getRelationSummaries(existing.id);
+        effectiveBlockers = blockerRelations.blockedBy.map((r: { id: string }) => r.id);
+      }
+      if (effectiveBlockers.length === 0) {
+        res.status(422).json({
+          error: "Issues moved to blocked status must specify at least one blockedByIssueId",
+        });
+        return;
+      }
+    }
+
     if (reviewRequest !== undefined && transition.patch.executionState === undefined) {
       const existingExecutionState = parseIssueExecutionState(existing.executionState);
       if (!existingExecutionState || existingExecutionState.status !== "pending") {
