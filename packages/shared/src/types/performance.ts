@@ -64,6 +64,7 @@ export interface PerformanceOverview {
   topErrorRoutes: { route: string; method: string; errorCount: number; totalCount: number; errorRate: number }[];
   dbQueries: DbQueryOverview;
   webVitals: WebVitalReport | null;
+  webVitalReportCount: number;
   suggestions: OptimizationSuggestion[];
 }
 

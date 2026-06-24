@@ -1,0 +1,16 @@
+[Unit]
+Description=Paperclip Auto-Heal — 500 Detection & Recovery
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=paperclip
+WorkingDirectory=/opt/paperclip
+EnvironmentFile=/opt/paperclip/config/auto-heal.env
+ExecStart=/opt/paperclip/scripts/auto-heal.sh
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

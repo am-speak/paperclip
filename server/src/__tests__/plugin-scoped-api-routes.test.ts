@@ -59,7 +59,7 @@ async function createApp(input: {
   workerRunning?: boolean;
   workerResult?: unknown;
 }) {
-  const [{ pluginRoutes }, { errorHandler }] = await Promise.all([
+  const [{ pluginRoutes }, { errorHandler, contentSecurityPolicy }] = await Promise.all([
     import("../routes/plugins.js"),
     import("../middleware/index.js"),
   ]);
@@ -74,6 +74,7 @@ async function createApp(input: {
 
   const app = express();
   app.use(express.json());
+  app.use(contentSecurityPolicy);
   app.use((req, _res, next) => {
     req.actor = input.actor as typeof req.actor;
     next();
@@ -200,7 +201,9 @@ describe.sequential("plugin scoped API routes", () => {
     expect(res.status).toBe(200);
     expect(res.headers["cache-control"]).toBe("no-store");
     expect(res.headers["x-request-id"]).toBe("plugin-request");
-    expect(res.headers["content-security-policy"]).toBeUndefined();
+    // Plugin's CSP header is stripped by the allowlist, but the app-level
+    // CSP middleware applies a global policy to all responses.
+    expect(res.headers["content-security-policy"]).toBe("default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws: wss:; frame-ancestors 'none'; form-action 'self'; base-uri 'self'; object-src 'none'");
     expect(res.headers.location).toBeUndefined();
   });
 

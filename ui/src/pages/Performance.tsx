@@ -241,7 +241,7 @@ function WebVitalCard({ overview }: { overview: PerformanceOverview }) {
           <MousePointer2 className="h-4 w-4" />
           Core Web Vitals
         </CardTitle>
-        <CardDescription>From the most recent page load</CardDescription>
+        <CardDescription>Average from {overview.webVitalReportCount} page load{overview.webVitalReportCount !== 1 ? 's' : ''}</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 gap-4">

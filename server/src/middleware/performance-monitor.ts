@@ -33,5 +33,5 @@ export function createDbQueryCallback() {
 }
 
 export function recordWebVitals(report: WebVitalReport): void {
-  perfMonitor.setWebVitals(report);
+  perfMonitor.recordWebVitals(report);
 }

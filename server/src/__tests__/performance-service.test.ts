@@ -56,6 +56,7 @@ describe("performanceService", () => {
         topErrorRoutes: [],
         dbQueries: { totalQueries: 0, avgMs: 0, p95Ms: 0, p99Ms: 0, slowQueries: [] },
         webVitals: null,
+        webVitalReportCount: 0,
         suggestions: [],
       });
     });
@@ -149,6 +150,49 @@ describe("performanceService", () => {
       svc.record(observation({ timestamp: now - 10_000 }));
       const overview = svc.overview();
       expect(overview.windowSeconds).toBe(300);
+    });
+  });
+
+  describe("web vitals aggregation", () => {
+    it("returns null and count 0 when no web vitals recorded", () => {
+      const svc = performanceService();
+      const overview = svc.overview();
+      expect(overview.webVitals).toBeNull();
+      expect(overview.webVitalReportCount).toBe(0);
+    });
+
+    it("aggregates multiple web vital reports with averages", () => {
+      const svc = performanceService();
+      svc.recordWebVitals({ lcp: 2000, cls: 0.1, inp: 150, fcp: 800, ttfb: 300, reportedAt: Date.now() - 5000 });
+      svc.recordWebVitals({ lcp: 4000, cls: 0.3, inp: 350, fcp: 1200, ttfb: 600, reportedAt: Date.now() - 3000 });
+      const overview = svc.overview({ windowSeconds: 60 });
+      expect(overview.webVitals).not.toBeNull();
+      expect(overview.webVitals!.lcp).toBe(3000);
+      expect(overview.webVitals!.cls).toBeCloseTo(0.2);
+      expect(overview.webVitals!.inp).toBe(250);
+      expect(overview.webVitals!.fcp).toBe(1000);
+      expect(overview.webVitals!.ttfb).toBe(450);
+      expect(overview.webVitalReportCount).toBe(2);
+    });
+
+    it("prunes web vital reports outside the time window", () => {
+      const svc = performanceService();
+      svc.recordWebVitals({ lcp: 1000, reportedAt: Date.now() - 120_000 });
+      svc.recordWebVitals({ lcp: 3000, reportedAt: Date.now() - 10_000 });
+      const overview = svc.overview({ windowSeconds: 30 });
+      expect(overview.webVitalReportCount).toBe(1);
+      expect(overview.webVitals!.lcp).toBe(3000);
+    });
+
+    it("handles partial reports gracefully", () => {
+      const svc = performanceService();
+      svc.recordWebVitals({ lcp: 2500, reportedAt: Date.now() - 5000 });
+      svc.recordWebVitals({ cls: 0.15, inp: 200, reportedAt: Date.now() - 3000 });
+      const overview = svc.overview({ windowSeconds: 60 });
+      expect(overview.webVitalReportCount).toBe(2);
+      expect(overview.webVitals!.lcp).toBe(2500);
+      expect(overview.webVitals!.cls).toBeCloseTo(0.15);
+      expect(overview.webVitals!.inp).toBe(200);
     });
   });
 });

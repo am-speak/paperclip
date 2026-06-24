@@ -23,7 +23,7 @@ const SLOW_QUERY_THRESHOLD_MS = 100;
 export function performanceService() {
   const buffer: RawObservation[] = [];
   const dbBuffer: DbQueryObservation[] = [];
-  let webVitals: WebVitalReport | null = null;
+  let webVitals: WebVitalReport[] = [];
 
   function record(observation: RawObservation): void {
     buffer.push(observation);
@@ -39,8 +39,11 @@ export function performanceService() {
     }
   }
 
-  function setWebVitals(report: WebVitalReport): void {
-    webVitals = report;
+  function recordWebVitals(report: WebVitalReport): void {
+    webVitals.push(report);
+    if (webVitals.length > MAX_BUFFER) {
+      webVitals.splice(0, webVitals.length - MAX_BUFFER);
+    }
   }
 
   function prune(now: number, windowSeconds: number): void {
@@ -59,6 +62,14 @@ export function performanceService() {
     }
     if (firstDbAlive > 0) {
       dbBuffer.splice(0, firstDbAlive);
+    }
+
+    let firstWvAlive = 0;
+    while (firstWvAlive < webVitals.length && webVitals[firstWvAlive].reportedAt < cutoff) {
+      firstWvAlive++;
+    }
+    if (firstWvAlive > 0) {
+      webVitals.splice(0, firstWvAlive);
     }
   }
 
@@ -232,16 +243,19 @@ export function performanceService() {
       topErrorRoutes: [] as { route: string; method: string; errorCount: number; totalCount: number; errorRate: number }[],
       dbQueries: buildDbQueryOverview([]),
       webVitals: null as WebVitalReport | null,
+      webVitalReportCount: 0,
       suggestions: [] as OptimizationSuggestion[],
     };
 
     if (buffer.length === 0) {
       emptyOverview.dbQueries = buildDbQueryOverview(dbBuffer);
-      emptyOverview.webVitals = webVitals;
+      const agg = aggregateWebVitals(webVitals);
+      emptyOverview.webVitals = agg.report;
+      emptyOverview.webVitalReportCount = agg.count;
       emptyOverview.suggestions = buildSuggestions({
         totalRequests: 0, errorRate: 0, buckets: [],
         topSlowRoutes: [], topErrorRoutes: [],
-        dbQueries: emptyOverview.dbQueries, webVitalsReport: webVitals,
+        dbQueries: emptyOverview.dbQueries, webVitalsReport: agg.report,
       });
       return emptyOverview;
     }
@@ -309,6 +323,7 @@ export function performanceService() {
     topErrorRoutes.sort((a, b) => b.errorRate - a.errorRate);
 
     const dbQueries = buildDbQueryOverview(dbBuffer);
+    const agg = aggregateWebVitals(webVitals);
 
     const overviewResult: PerformanceOverview = {
       totalRequests,
@@ -323,7 +338,8 @@ export function performanceService() {
       topSlowRoutes,
       topErrorRoutes: topErrorRoutes.slice(0, 10),
       dbQueries,
-      webVitals,
+      webVitals: agg.report,
+      webVitalReportCount: agg.count,
       suggestions: [],
     };
 
@@ -334,10 +350,39 @@ export function performanceService() {
       topSlowRoutes,
       topErrorRoutes: overviewResult.topErrorRoutes,
       dbQueries,
-      webVitalsReport: webVitals,
+      webVitalsReport: agg.report,
     });
 
     return overviewResult;
+  }
+
+  function aggregateWebVitals(reports: WebVitalReport[]): { report: WebVitalReport | null; count: number } {
+    if (reports.length === 0) return { report: null, count: 0 };
+
+    let lcpSum = 0; let lcpCount = 0;
+    let clsSum = 0; let clsCount = 0;
+    let inpSum = 0; let inpCount = 0;
+    let fcpSum = 0; let fcpCount = 0;
+    let ttfbSum = 0; let ttfbCount = 0;
+    let latestTs = 0;
+
+    for (const r of reports) {
+      if (r.lcp !== undefined) { lcpSum += r.lcp; lcpCount++; }
+      if (r.cls !== undefined) { clsSum += r.cls; clsCount++; }
+      if (r.inp !== undefined) { inpSum += r.inp; inpCount++; }
+      if (r.fcp !== undefined) { fcpSum += r.fcp; fcpCount++; }
+      if (r.ttfb !== undefined) { ttfbSum += r.ttfb; ttfbCount++; }
+      if (r.reportedAt > latestTs) latestTs = r.reportedAt;
+    }
+
+    const report: WebVitalReport = { reportedAt: latestTs };
+    if (lcpCount > 0) report.lcp = Math.round(lcpSum / lcpCount);
+    if (clsCount > 0) report.cls = clsSum / clsCount;
+    if (inpCount > 0) report.inp = Math.round(inpSum / inpCount);
+    if (fcpCount > 0) report.fcp = Math.round(fcpSum / fcpCount);
+    if (ttfbCount > 0) report.ttfb = Math.round(ttfbSum / ttfbCount);
+
+    return { report, count: reports.length };
   }
 
   function buildDbQueryOverview(observations: DbQueryObservation[]): DbQueryOverview {
@@ -387,5 +432,5 @@ export function performanceService() {
     };
   }
 
-  return { record, recordDbQuery, setWebVitals, overview };
+  return { record, recordDbQuery, recordWebVitals, overview };
 }
