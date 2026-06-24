@@ -38,6 +38,8 @@ An optional drop-in engineering pod for companies that want a working software-d
 - `QA` — verifies fixes and captures acceptance evidence.
 - `product-engineering` project — the rolling backlog this pod works against.
 - `weekly-engineering-sync` routine — recurring CTO-owned check-in to surface blockers and confirm the next deliverable.
+- `deployment-automatisierung` routine — recurring CTO-owned deployment infrastructure health check running every 6 hours. Runs pre-deploy gates (quality, staging, SSL, CSP, production, deployment lock, cache readiness) and creates blocked issues on failure.
+- `regulatory-radar` routine — recurring CTO-owned regulatory feed-check running hourly. Monitors 5 EU regulatory sources (EU AI Act, GDPR, NIS2, DSA, CRA) for material changes and creates blocked issues with recommendations.
 
 ## Skill rationale
 

@@ -3,3 +3,16 @@ agents:
   cto:
     permissions:
       canCreateAgents: true
+routines:
+   deployment-automatisierung:
+     triggers:
+       - kind: schedule
+         cronExpression: "0 */6 * * *"
+         timezone: UTC
+         enabled: true
+   regulatory-radar:
+     triggers:
+       - kind: schedule
+         cronExpression: "0 * * * *"
+         timezone: UTC
+         enabled: true

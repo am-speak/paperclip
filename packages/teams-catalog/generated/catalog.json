@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "packageName": "@paperclipai/teams-catalog",
   "packageVersion": "0.1.0",
-  "generatedAt": "2026-06-04T18:03:41.262Z",
+  "generatedAt": "2026-06-24T10:03:30.779Z",
   "teams": [
     {
       "id": "paperclipai:bundled:company-defaults:core-exec-team",
@@ -265,7 +265,7 @@
         "agents": 3,
         "projects": 1,
         "tasks": 0,
-        "routines": 1,
+        "routines": 3,
         "localSkills": 0,
         "catalogSkills": 4,
         "externalSkillSources": 0
@@ -331,14 +331,14 @@
         {
           "path": "TEAM.md",
           "kind": "team",
-          "sizeBytes": 2583,
-          "sha256": "7204eeef78a48714dd3f82b82e171a4039adc6325e91a6bdf51a442105ee33b0"
+          "sizeBytes": 3072,
+          "sha256": "e61e7ad1cd26071b916ef41d608ed59f1db721c5f2bc3f9228a545f3b962f569"
         },
         {
           "path": ".paperclip.yaml",
           "kind": "extension",
-          "sizeBytes": 81,
-          "sha256": "54babf05ba130ec54a143abf01581d99c0ac2936fd0d929bf0e0edd00e29d861"
+          "sizeBytes": 389,
+          "sha256": "07e647c2035cad3a96112803e222f0cf3c2dd05155f14819986771c53879d18b"
         },
         {
           "path": "agents/cto/AGENTS.md",
@@ -365,6 +365,18 @@
           "sha256": "225d01c5b5b77f5d4dafedc083899c9368c9b079db1d3b7b67cfebd4677fc527"
         },
         {
+          "path": "projects/product-engineering/tasks/deployment-automatisierung/TASK.md",
+          "kind": "task",
+          "sizeBytes": 395,
+          "sha256": "dc0ad8675fbfb57472a0e4ae6da042ae9163ac18099c5fea717c007595ec773d"
+        },
+        {
+          "path": "projects/product-engineering/tasks/regulatory-radar/TASK.md",
+          "kind": "task",
+          "sizeBytes": 1036,
+          "sha256": "c0fa2a6d5157fa0c552642935de6183efebb2f95d33a5c46dcb99168216bda3c"
+        },
+        {
           "path": "projects/product-engineering/tasks/weekly-engineering-sync/TASK.md",
           "kind": "task",
           "sizeBytes": 322,
@@ -373,7 +385,7 @@
       ],
       "trustLevel": "assets",
       "compatibility": "compatible",
-      "contentHash": "sha256:74ddeaeb11805835a4a67fc4530b048ab7f8aa1dc7d2b80acea139a933d158d3"
+      "contentHash": "sha256:d3703c7d1fa234c60285580c9301193fb0798b4fc030309e33197c44bc85da17"
     },
     {
       "id": "paperclipai:optional:content:content-machine",
@@ -435,6 +447,12 @@
           "sha256": "f7c272c8b0c183fc840d49eb4851b7cdd1a30a5aa8d6415d215110f3238f6f13"
         },
         {
+          "path": ".paperclip.yaml",
+          "kind": "extension",
+          "sizeBytes": 173,
+          "sha256": "a8fecd5e5723b4999e74739bbd705fa29f310ad654cce3b649f4e4bca963adbc"
+        },
+        {
           "path": "agents/content-lead/AGENTS.md",
           "kind": "agent",
           "sizeBytes": 251,
@@ -459,9 +477,9 @@
           "sha256": "aa62a332fc3149d6c0d58ca589c6b3910a373d542f16f749ec68ef2f3d7f29e9"
         }
       ],
-      "trustLevel": "markdown_only",
+      "trustLevel": "assets",
       "compatibility": "compatible",
-      "contentHash": "sha256:06822cec5f2b6910cb37ba0ebd5e04ed5c7e34f77225564ddddc2470779cdaa6"
+      "contentHash": "sha256:2c12f8a3640d6207d7ceb0c78bf55859f1e44255fa1a78c95f100eaf902a3cbe"
     }
   ]
 }
