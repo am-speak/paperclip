@@ -8,6 +8,7 @@ import { readPersistedDevServerStatus, toDevServerHealthStatus, writeDevServerRe
 import { logger } from "../middleware/logger.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { serverVersion } from "../version.js";
+import { autoHeal } from "../services/auto-heal.js";
 
 function shouldExposeFullHealthDetails(
   actorType: "none" | "board" | "agent" | null | undefined,
@@ -178,6 +179,29 @@ export function healthRoutes(
       },
       ...(devServer ? { devServer } : {}),
     });
+  });
+
+  router.get("/routes", (req, res) => {
+    const windowSeconds = req.query.windowSeconds
+      ? Number(req.query.windowSeconds)
+      : undefined;
+    const routes = autoHeal.getRouteHealth(windowSeconds);
+    res.json({ routes, monitored: routes.length });
+  });
+
+  router.post("/routes/reset", (req, res) => {
+    const { route, method } = req.body as { route?: string; method?: string };
+    if (route && method) {
+      const ok = autoHeal.resetRoute(route, method);
+      if (ok) {
+        res.json({ status: "reset", route, method });
+      } else {
+        res.status(404).json({ error: "route_not_found" });
+      }
+    } else {
+      autoHeal.resetAll();
+      res.json({ status: "reset_all" });
+    }
   });
 
   return router;

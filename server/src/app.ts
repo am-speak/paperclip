@@ -38,6 +38,7 @@ import { instanceSettingsRoutes } from "./routes/instance-settings.js";
 import { openApiRoutes } from "./routes/openapi.js";
 import { performanceRoutes } from "./routes/performance.js";
 import { performanceMiddleware } from "./middleware/performance-monitor.js";
+import { circuitBreakerMiddleware } from "./middleware/circuit-breaker.js";
 import {
   instanceDatabaseBackupRoutes,
   type InstanceDatabaseBackupService,
@@ -46,6 +47,7 @@ import { llmRoutes } from "./routes/llms.js";
 import { authRoutes } from "./routes/auth.js";
 import { assetRoutes } from "./routes/assets.js";
 import { accessRoutes } from "./routes/access.js";
+import { craComplianceRoutes } from "./routes/cra-compliance.js";
 import { pluginRoutes } from "./routes/plugins.js";
 import { adapterRoutes } from "./routes/adapters.js";
 import { pluginUiStaticRoutes } from "./routes/plugin-ui-static.js";
@@ -220,6 +222,7 @@ export async function createApp(
       companyDeletionEnabled: opts.companyDeletionEnabled,
     }),
   );
+  api.use(circuitBreakerMiddleware());
   api.use(openApiRoutes());
   api.use(performanceRoutes());
   api.use("/companies", companyRoutes(db, opts.storageService));
@@ -325,6 +328,7 @@ export async function createApp(
     ),
   );
   api.use(adapterRoutes());
+  api.use("/v1/cra", craComplianceRoutes(db));
   api.use(
     accessRoutes(db, {
       deploymentMode: opts.deploymentMode,

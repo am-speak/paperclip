@@ -14,6 +14,7 @@ set -euo pipefail
 #   --once          Run a single check cycle (no continuous loop)
 #   --verbose       Enable verbose output
 #   --dry-run       Print actions without executing
+#   --routes        Monitor all API routes via GET /api/health/routes
 #   --help          Show this help
 #
 # Configuration (env vars):
@@ -31,10 +32,17 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  scripts/auto-heal.sh [--once] [--verbose] [--dry-run] [--help]
+  scripts/auto-heal.sh [--once] [--verbose] [--dry-run] [--routes] [--help]
 
 Detects 500s on critical routes, runs recovery commands, verifies,
 and escalates to the board after repeated failures.
+
+Options:
+  --once          Run a single check cycle (no continuous loop)
+  --verbose       Enable verbose output
+  --dry-run       Print actions without executing
+  --routes        Monitor all API routes via GET /api/health/routes
+  --help          Show this help
 
 Configuration via environment variables:
   AUTO_HEAL_ROUTES         (default: http://localhost:3100/api/health)
@@ -56,13 +64,17 @@ STATE_DIR="${AUTO_HEAL_STATE_DIR:-/tmp/auto-heal}"
 ONLY_ONCE=0
 VERBOSE=0
 DRY_RUN=0
+ROUTE_MONITOR=0
+BASE_URL="${AUTO_HEAL_BASE_URL:-http://localhost:3100}"
 
 # Critical routes to monitor — override via AUTO_HEAL_ROUTES env var
-if [[ -n "${AUTO_HEAL_ROUTES:-}" ]]; then
+if [[ "${ROUTE_MONITOR}" == "1" ]]; then
+  ROUTES=()
+elif [[ -n "${AUTO_HEAL_ROUTES:-}" ]]; then
   IFS=' ' read -ra ROUTES <<< "$AUTO_HEAL_ROUTES"
 else
   ROUTES=(
-    "http://localhost:3100/api/health"
+    "${BASE_URL}/api/health"
   )
 fi
 
@@ -141,6 +153,29 @@ check_route() {
   printf '%s' "$http_code"
 }
 
+# ── Route health via /api/health/routes ────────────────────────────────────────
+fetch_route_health() {
+  local url="${BASE_URL}/api/health/routes"
+  if [[ "$DRY_RUN" == "1" ]]; then
+    echo '{"routes":[]}'
+    return
+  fi
+
+  local response
+  response=$(curl -sS --max-time 10 "$url" 2>/dev/null || echo '{"routes":[]}')
+  printf '%s' "$response"
+}
+
+parse_failing_routes() {
+  local health_json="$1"
+  # Extract routes where circuitState is "open" or errorRate > 10
+  printf '%s' "$health_json" | jq -r '
+    .routes[] |
+    select(.circuitState == "open" or .errorRate > 10) |
+    "\(.method) \(.route) (state=\(.circuitState), errors=\(.errorRate)%)"
+  ' 2>/dev/null || true
+}
+
 # ── Recovery execution ────────────────────────────────────────────────────────
 run_recovery() {
   info "Running recovery commands..."
@@ -211,6 +246,22 @@ escalate_to_board() {
     return
   fi
 
+  # Fetch route health info for richer context
+  local route_health_section=""
+  if [[ "$ROUTE_MONITOR" == "1" ]]; then
+    local health_json
+    health_json=$(fetch_route_health)
+    local failing
+    failing=$(parse_failing_routes "$health_json")
+    if [[ -n "$failing" ]]; then
+      route_health_section="
+### Route Health Overview
+\`\`\`
+$(printf '%s' "$failing" | head -20)
+\`\`\`"
+    fi
+  fi
+
   if [[ -n "$issue_id" ]]; then
     # Update the existing issue with escalation status
     local payload
@@ -225,7 +276,7 @@ All recovery attempts exhausted. Manual intervention required.
 
 ### Recovery commands attempted:
 $(printf ' - `%s`\n' "${RECOVERY_CMDS[@]}")
-
+${route_health_section}
 ### Next steps:
 1. Investigate the root cause of the persistent 500 errors
 2. Apply a permanent fix
@@ -251,6 +302,73 @@ $(printf ' - `%s`\n' "${RECOVERY_CMDS[@]}")
 heal_cycle() {
   local any_failing=0
 
+  if [[ "$ROUTE_MONITOR" == "1" ]]; then
+    # Route monitor mode: fetch per-route health, check failing routes
+    verbose "Fetching route health from ${BASE_URL}/api/health/routes"
+    local health_json
+    health_json=$(fetch_route_health)
+    local failing_count
+    failing_count=$(printf '%s' "$health_json" | jq -r '[.routes[] | select(.circuitState == "open" or .errorRate > 10)] | length' 2>/dev/null || echo "0")
+
+    if [[ "$failing_count" -eq 0 ]]; then
+      verbose "  All routes healthy (no open circuits, no elevated error rates)"
+      return 0
+    fi
+
+    warn "  ${failing_count} route(s) in degraded state detected"
+
+    local failing_routes
+    failing_routes=$(printf '%s' "$health_json" | jq -c '.routes[] | select(.circuitState == "open" or .errorRate > 10)' 2>/dev/null || true)
+    while IFS= read -r fr; do
+      if [[ -z "$fr" ]]; then continue; fi
+      local method route circuit_state error_rate
+      method=$(printf '%s' "$fr" | jq -r '.method')
+      route=$(printf '%s' "$fr" | jq -r '.route')
+      circuit_state=$(printf '%s' "$fr" | jq -r '.circuitState')
+      error_rate=$(printf '%s' "$fr" | jq -r '.errorRate')
+
+      local route_label="${method} ${route}"
+      warn "  ${route_label} => circuit=${circuit_state}, errorRate=${error_rate}%"
+
+      local state_key="${method}:${route}"
+      local attempts
+      attempts=$(read_attempts "$state_key")
+      attempts=$((attempts + 1))
+      write_attempts "$state_key" "$attempts"
+
+      info "  Recovery attempt ${attempts}/${MAX_ATTEMPTS} for ${route_label}"
+
+      if [[ "$attempts" -gt "$MAX_ATTEMPTS" ]]; then
+        escalate_to_board "$route_label" "$attempts"
+        any_failing=1
+        continue
+      fi
+
+      # Run recovery
+      run_recovery
+
+      # Verify: re-check route health
+      sleep "$VERIFY_WAIT"
+      local verify_json
+      verify_json=$(fetch_route_health)
+      local still_failing
+      still_failing=$(printf '%s' "$verify_json" | jq -r --arg r "$route" --arg m "$method" '[.routes[] | select(.route == $r and .method == $m and (.circuitState == "open" or .errorRate > 10))] | length' 2>/dev/null || echo "1")
+
+      if [[ "$still_failing" == "0" ]]; then
+        info "  Auto-heal successful for ${route_label} after ${attempts} attempt(s)"
+        reset_attempts "$state_key"
+      else
+        warn "  Recovery attempt ${attempts} did not resolve the issue for ${route_label}"
+        any_failing=1
+        if [[ "$attempts" -ge "$MAX_ATTEMPTS" ]]; then
+          escalate_to_board "$route_label" "$attempts"
+        fi
+      fi
+    done <<< "$failing_routes"
+    return "$any_failing"
+  fi
+
+  # Legacy mode: check specific ROUTES
   for url in "${ROUTES[@]}"; do
     verbose "Checking route: $url"
 
@@ -327,6 +445,7 @@ main() {
       --once)    ONLY_ONCE=1; shift ;;
       --verbose) VERBOSE=1; shift ;;
       --dry-run) DRY_RUN=1; shift ;;
+      --routes)  ROUTE_MONITOR=1; shift ;;
       --help|-h) usage; exit 0 ;;
       *)         err "Unknown option: $1"; usage; exit 1 ;;
     esac
@@ -337,7 +456,11 @@ main() {
   require_command jq
 
   info "Auto-Heal starting"
-  info "  Routes: ${ROUTES[*]}"
+  if [[ "$ROUTE_MONITOR" == "1" ]]; then
+    info "  Mode: route monitor (all API routes via ${BASE_URL}/api/health/routes)"
+  else
+    info "  Routes: ${ROUTES[*]}"
+  fi
   info "  Max attempts: ${MAX_ATTEMPTS}"
   info "  State dir: ${STATE_DIR}"
   if [[ "$DRY_RUN" == "1" ]]; then
