@@ -72,6 +72,7 @@ function remoteProviderHttpError(error: unknown, context: {
   provider: SecretProvider;
   providerConfigId: string;
   operation: string;
+  providerConfig?: Record<string, unknown> | null;
 }): HttpError {
   if (isSecretProviderClientError(error)) {
     logger.warn(
@@ -85,7 +86,7 @@ function remoteProviderHttpError(error: unknown, context: {
       },
       "remote secret provider request failed",
     );
-    return new HttpError(error.status, error.message, { code: error.code });
+    return new HttpError(error.status, error.message, safeRemoteProviderErrorDetails(error, context));
   }
   if (error instanceof HttpError) return error;
   logger.warn(
@@ -99,7 +100,46 @@ function remoteProviderHttpError(error: unknown, context: {
     },
     "remote secret provider request failed",
   );
-  return new HttpError(502, "Remote secret provider request failed.", { code: "provider_error" });
+  return new HttpError(502, "Remote secret provider request failed.", safeRemoteProviderErrorDetails(null, context));
+}
+
+function safeRemoteProviderErrorDetails(
+  error: { code: string } | null,
+  context: {
+    provider: SecretProvider;
+    providerConfigId: string;
+    operation: string;
+    providerConfig?: Record<string, unknown> | null;
+  },
+): Record<string, unknown> {
+  if (
+    context.provider !== "aws_secrets_manager" ||
+    context.operation !== "secret_provider_config.discovery.preview"
+  ) {
+    return { code: error?.code ?? "provider_error" };
+  }
+  const details: Record<string, unknown> = {
+    code: error?.code ?? "provider_error",
+    provider: context.provider,
+    operation: context.operation,
+    providerConfigId: context.providerConfigId,
+  };
+  const region = safeString(context.providerConfig?.region);
+  if (region) details.region = region;
+  details.providerVaultContext = context.providerConfigId === "discovery-preview" ? "draft_config" : "provider_config";
+  details.credentialPath = "Paperclip server runtime/provider credential path";
+  if (error?.code === "access_denied") {
+    details.requiredCapability = "secretsmanager:ListSecrets";
+    details.actionableMessage =
+      "AWS discovery preview needs secretsmanager:ListSecrets in the selected region for the Paperclip server runtime/provider credential path.";
+    details.safeAlternative =
+      "If the operator already knows the exact AWS Secrets Manager ARN, paste/link that ARN instead of using discovery. Exact-resource DescribeSecret and runtime read permissions are still required.";
+  }
+  return details;
+}
+
+function safeString(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function remoteImportRowFailureReason(error: unknown, fallback: string, context: {
@@ -865,13 +905,13 @@ export function secretService(db: Db) {
           status: environments.status,
         })
         .from(environments)
-        .where(and(eq(environments.companyId, companyId), inArray(environments.id, environmentIds)));
+        .where(inArray(environments.id, environmentIds));
       for (const row of rows) {
         setTarget({
           type: "environment",
           id: row.id,
           label: row.name,
-          href: "/company/settings/environments",
+          href: "/company/settings/instance/environments",
           status: row.status,
         });
       }
@@ -1091,6 +1131,7 @@ export function secretService(db: Db) {
           provider: providerId,
           providerConfigId: "discovery-preview",
           operation: "secret_provider_config.discovery.preview",
+          providerConfig: parsed.data.config,
         });
       }
     },
@@ -2180,6 +2221,20 @@ export function secretService(db: Db) {
       });
       return normalizedRefs;
     },
+
+    listBindingCompanyIdsForTarget: async (
+      target: { targetType: SecretBindingTargetType; targetId: string },
+    ): Promise<string[]> =>
+      db
+        .select({ companyId: companySecretBindings.companyId })
+        .from(companySecretBindings)
+        .where(
+          and(
+            eq(companySecretBindings.targetType, target.targetType),
+            eq(companySecretBindings.targetId, target.targetId),
+          ),
+        )
+        .then((rows) => [...new Set(rows.map((row) => row.companyId))]),
 
     syncEnvBindingsForTarget: async (
       companyId: string,
