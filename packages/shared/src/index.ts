@@ -1440,6 +1440,7 @@ export type {
 } from "./environment-support.js";
 
 export type { AdapterRegistryEntry } from "./types/adapter-registry.js";
+export type { DbQueryBucket, DbQueryOverview, OptimizationSuggestion, PerformanceMetricBucket, PerformanceOverview, PerformanceWindowConfig, WebVitalReport } from "./types/performance.js";
 
 export {
   adapterRegistryEntrySchema,

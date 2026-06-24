@@ -45,8 +45,48 @@ export type MigrationState =
       reason: "no-migration-journal-empty-db" | "no-migration-journal-non-empty-db" | "pending-migrations";
     };
 
-export function createDb(url: string) {
+export interface DbQueryPerfInfo {
+  sql: string;
+  durationMs: number;
+  error?: string;
+}
+
+export type DbQueryPerfCallback = (info: DbQueryPerfInfo) => void;
+
+export function createDb(url: string, onQuery?: DbQueryPerfCallback) {
   const sql = postgres(url);
+
+      if (onQuery) {
+    const wrappedSql = new Proxy(sql, {
+      get(target, prop, receiver) {
+        if (prop === "unsafe") {
+          return (query: string, params?: any[], opts?: any) => {
+            const start = performance.now();
+            try {
+              const result = target.unsafe(query, params, opts);
+              if (result && typeof result.then === "function") {
+                result.then(
+                  () => onQuery({ sql: query, durationMs: Math.round(performance.now() - start) }),
+                  (err: unknown) => {
+                    onQuery({ sql: query, durationMs: Math.round(performance.now() - start), error: String(err) });
+                  },
+                );
+              } else {
+                onQuery({ sql: query, durationMs: Math.round(performance.now() - start) });
+              }
+              return result;
+            } catch (e) {
+              onQuery({ sql: query, durationMs: Math.round(performance.now() - start), error: String(e) });
+              throw e;
+            }
+          };
+        }
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+    return drizzlePg(wrappedSql, { schema });
+  }
+
   return drizzlePg(sql, { schema });
 }
 

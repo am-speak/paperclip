@@ -491,6 +491,7 @@ export type {
   UserCompanyAccessResponse,
 } from "./access.js";
 export type { QuotaWindow, ProviderQuotaResult } from "./quota.js";
+export type { DbQueryBucket, DbQueryOverview, OptimizationSuggestion, PerformanceMetricBucket, PerformanceOverview, PerformanceWindowConfig, WebVitalReport } from "./performance.js";
 export type {
   CompanyPortabilityInclude,
   CompanyPortabilityEnvInput,

@@ -10,6 +10,8 @@ export {
   migratePostgresIfEmpty,
   type MigrationBootstrapResult,
   type Db,
+  type DbQueryPerfInfo,
+  type DbQueryPerfCallback,
 } from "./client.js";
 export {
   getEmbeddedPostgresTestSupport,

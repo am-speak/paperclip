@@ -18,11 +18,11 @@ import { agentRoutes } from "./routes/agents.js";
 import { projectRoutes } from "./routes/projects.js";
 import { issueRoutes } from "./routes/issues.js";
 import { issueTreeControlRoutes } from "./routes/issue-tree-control.js";
-import { fileResourceRoutes } from "./routes/file-resources.js";
+import { fileResourceRoutes, createFileResourceLimiter } from "./routes/file-resources.js";
 import { routineRoutes } from "./routes/routines.js";
+import { goalRoutes } from "./routes/goals.js";
 import { environmentRoutes } from "./routes/environments.js";
 import { executionWorkspaceRoutes } from "./routes/execution-workspaces.js";
-import { goalRoutes } from "./routes/goals.js";
 import { boardChatRoutes } from "./routes/board-chat.js";
 import { approvalRoutes } from "./routes/approvals.js";
 import { secretRoutes } from "./routes/secrets.js";
@@ -36,6 +36,8 @@ import { resourceMembershipRoutes } from "./routes/resource-memberships.js";
 import { inboxDismissalRoutes } from "./routes/inbox-dismissals.js";
 import { instanceSettingsRoutes } from "./routes/instance-settings.js";
 import { openApiRoutes } from "./routes/openapi.js";
+import { performanceRoutes } from "./routes/performance.js";
+import { performanceMiddleware } from "./middleware/performance-monitor.js";
 import {
   instanceDatabaseBackupRoutes,
   type InstanceDatabaseBackupService,
@@ -175,6 +177,7 @@ export async function createApp(
     verify: captureRawBody,
   }));
   app.use(httpLogger);
+  app.use(performanceMiddleware);
   const privateHostnameGateEnabled = shouldEnablePrivateHostnameGuard({
     deploymentMode: opts.deploymentMode,
     deploymentExposure: opts.deploymentExposure,
@@ -218,6 +221,7 @@ export async function createApp(
     }),
   );
   api.use(openApiRoutes());
+  api.use(performanceRoutes());
   api.use("/companies", companyRoutes(db, opts.storageService));
   api.use(llmRoutes(db));
   api.use(companySkillRoutes(db));
