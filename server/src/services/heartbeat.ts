@@ -12068,14 +12068,14 @@ export function heartbeatService(db: Db, options: HeartbeatServiceOptions = {}) 
         else skipped += 1;
       }
 
-      const issueMonitors = await tickDueIssueMonitors(now);
-
       return {
-        checked: checked + issueMonitors.checked,
-        enqueued: enqueued + issueMonitors.triggered,
-        skipped: skipped + issueMonitors.skipped,
+        checked,
+        enqueued,
+        skipped,
       };
     },
+
+    tickIssueMonitors: async (now = new Date()) => tickDueIssueMonitors(now),
 
     cancelRun: (runId: string, reason?: string, options?: CancelRunOptions) => cancelRunInternal(runId, reason, options),
 

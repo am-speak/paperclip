@@ -844,6 +844,19 @@ export async function startServer(): Promise<StartedServer> {
 
     setInterval(() => {
       void heartbeat
+        .tickIssueMonitors(new Date())
+        .then((result) => {
+          if (result.triggered > 0) {
+            logger.info({ ...result }, "issue monitor tick enqueued runs");
+          }
+        })
+        .catch((err) => {
+          logger.error({ err }, "issue monitor tick failed");
+        });
+    }, config.issueMonitorPollIntervalMs);
+
+    setInterval(() => {
+      void heartbeat
         .tickTimers(new Date())
         .then((result) => {
           if (result.enqueued > 0) {
@@ -994,6 +1007,7 @@ export async function startServer(): Promise<StartedServer> {
         migrationSummary,
         heartbeatSchedulerEnabled: config.heartbeatSchedulerEnabled,
         heartbeatSchedulerIntervalMs: config.heartbeatSchedulerIntervalMs,
+        issueMonitorPollIntervalMs: config.issueMonitorPollIntervalMs,
         databaseBackupEnabled: config.databaseBackupEnabled,
         databaseBackupIntervalMinutes: config.databaseBackupIntervalMinutes,
         databaseBackupRetentionDays: config.databaseBackupRetentionDays,

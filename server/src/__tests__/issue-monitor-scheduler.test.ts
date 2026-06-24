@@ -239,9 +239,9 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
     const heartbeat = heartbeatService(db);
     const tickAt = new Date("2026-04-11T12:31:00.000Z");
 
-    const result = await heartbeat.tickTimers(tickAt);
+    const result = await heartbeat.tickIssueMonitors(tickAt);
 
-    expect(result.enqueued).toBe(1);
+    expect(result.triggered).toBe(1);
 
     const issue = await db.select().from(issues).where(eq(issues.id, issueId)).then((rows) => rows[0]!);
     expect(issue.monitorNextCheckAt).toBeNull();
@@ -320,7 +320,7 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
     const heartbeat = heartbeatService(db);
     const tickAt = new Date("2026-04-11T12:31:00.000Z");
 
-    const result = await heartbeat.tickTimers(tickAt);
+    const result = await heartbeat.tickIssueMonitors(tickAt);
 
     expect(result.skipped).toBe(1);
 
@@ -350,9 +350,9 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
     const heartbeat = heartbeatService(db);
     const tickAt = new Date("2026-04-11T12:31:00.000Z");
 
-    const result = await heartbeat.tickTimers(tickAt);
+    const result = await heartbeat.tickIssueMonitors(tickAt);
 
-    expect(result.enqueued).toBe(0);
+    expect(result.triggered).toBe(0);
     expect(result.skipped).toBe(1);
 
     const issue = await db.select().from(issues).where(eq(issues.id, issueId)).then((rows) => rows[0]!);
@@ -395,9 +395,9 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
     const heartbeat = heartbeatService(db);
     const tickAt = new Date("2026-04-11T12:31:00.000Z");
 
-    const result = await heartbeat.tickTimers(tickAt);
+    const result = await heartbeat.tickIssueMonitors(tickAt);
 
-    expect(result.enqueued).toBe(0);
+    expect(result.triggered).toBe(0);
     expect(result.skipped).toBe(1);
 
     const issue = await db.select().from(issues).where(eq(issues.id, issueId)).then((rows) => rows[0]!);
@@ -430,7 +430,7 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
     const heartbeat = heartbeatService(db);
     const tickAt = new Date("2026-04-11T12:31:00.000Z");
 
-    await heartbeat.tickTimers(tickAt);
+    await heartbeat.tickIssueMonitors(tickAt);
 
     const wakeup = await db
       .select()

@@ -200,7 +200,7 @@ describeEmbeddedPostgres("heartbeat archived-company guard", () => {
     });
 
     const heartbeat = heartbeatService(db);
-    await heartbeat.tickTimers(new Date("2026-06-04T00:10:00Z"));
+    await heartbeat.tickIssueMonitors(new Date("2026-06-04T00:10:00Z"));
 
     const row = await db
       .select({
