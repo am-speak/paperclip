@@ -111,47 +111,52 @@ export function healthRoutes(
 
     let bootstrapStatus: "ready" | "bootstrap_pending" = "ready";
     let bootstrapInviteActive = false;
-    if (opts.deploymentMode === "authenticated") {
-      const roleCount = await db
-        .select({ count: count() })
-        .from(instanceUserRoles)
-        .where(sql`${instanceUserRoles.role} = 'instance_admin'`)
-        .then((rows) => Number(rows[0]?.count ?? 0));
-      bootstrapStatus = roleCount > 0 ? "ready" : "bootstrap_pending";
-
-      if (bootstrapStatus === "bootstrap_pending") {
-        const now = new Date();
-        const inviteCount = await db
-          .select({ count: count() })
-          .from(invites)
-          .where(
-            and(
-              eq(invites.inviteType, "bootstrap_ceo"),
-              isNull(invites.revokedAt),
-              isNull(invites.acceptedAt),
-              gt(invites.expiresAt, now),
-            ),
-          )
-          .then((rows) => Number(rows[0]?.count ?? 0));
-        bootstrapInviteActive = inviteCount > 0;
-      }
-    }
-
-    const persistedDevServerStatus = readPersistedDevServerStatus();
     let devServer: ReturnType<typeof toDevServerHealthStatus> | undefined;
-    if (exposeDevServerDetails && persistedDevServerStatus && typeof (db as { select?: unknown }).select === "function") {
-      const instanceSettings = instanceSettingsService(db);
-      const experimentalSettings = await instanceSettings.getExperimental();
-      const activeRunCount = await db
-        .select({ count: count() })
-        .from(heartbeatRuns)
-        .where(inArray(heartbeatRuns.status, ["queued", "running"]))
-        .then((rows) => Number(rows[0]?.count ?? 0));
 
-      devServer = toDevServerHealthStatus(persistedDevServerStatus, {
-        autoRestartEnabled: experimentalSettings.autoRestartDevServerWhenIdle ?? false,
-        activeRunCount,
-      });
+    try {
+      if (opts.deploymentMode === "authenticated") {
+        const roleCount = await db
+          .select({ count: count() })
+          .from(instanceUserRoles)
+          .where(sql`${instanceUserRoles.role} = 'instance_admin'`)
+          .then((rows) => Number(rows[0]?.count ?? 0));
+        bootstrapStatus = roleCount > 0 ? "ready" : "bootstrap_pending";
+
+        if (bootstrapStatus === "bootstrap_pending") {
+          const now = new Date();
+          const inviteCount = await db
+            .select({ count: count() })
+            .from(invites)
+            .where(
+              and(
+                eq(invites.inviteType, "bootstrap_ceo"),
+                isNull(invites.revokedAt),
+                isNull(invites.acceptedAt),
+                gt(invites.expiresAt, now),
+              ),
+            )
+            .then((rows) => Number(rows[0]?.count ?? 0));
+          bootstrapInviteActive = inviteCount > 0;
+        }
+      }
+
+      const persistedDevServerStatus = readPersistedDevServerStatus();
+      if (exposeDevServerDetails && persistedDevServerStatus && typeof (db as { select?: unknown }).select === "function") {
+        const instanceSettings = instanceSettingsService(db);
+        const experimentalSettings = await instanceSettings.getExperimental();
+        const activeRunCount = await db
+          .select({ count: count() })
+          .from(heartbeatRuns)
+          .where(inArray(heartbeatRuns.status, ["queued", "running"]))
+          .then((rows) => Number(rows[0]?.count ?? 0));
+
+        devServer = toDevServerHealthStatus(persistedDevServerStatus, {
+          autoRestartEnabled: experimentalSettings.autoRestartDevServerWhenIdle ?? false,
+          activeRunCount,
+        });
+      }
+    } catch (error) {
+      logger.warn({ err: error }, "Health check secondary queries failed");
     }
 
     if (!exposeFullDetails) {

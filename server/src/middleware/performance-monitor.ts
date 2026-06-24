@@ -1,8 +1,24 @@
 import type { Request, Response, NextFunction } from "express";
-import type { WebVitalReport } from "@paperclipai/shared";
-import { performanceService } from "../services/performance.js";
+import type { WebVitalReport, PerformanceConfig } from "@paperclipai/shared";
+import { performanceService, type PerformanceServiceOptions } from "../services/performance.js";
+import { autoHeal } from "../services/auto-heal.js";
 
 export const perfMonitor = performanceService();
+
+export function configurePerformanceMonitor(config: PerformanceConfig): void {
+  const opts: PerformanceServiceOptions = {
+    maxBuffer: config.maxBufferSize,
+    maxDbBuffer: config.maxDbBufferSize,
+    slowQueryThresholdMs: config.slowQueryThresholdMs,
+  };
+  perfMonitor.configure(opts);
+  autoHeal.configure({
+    openCooldownMs: config.circuitBreaker?.openCooldownMs,
+    halfOpenMaxAttempts: config.circuitBreaker?.halfOpenMaxAttempts,
+    maxConsecutiveTrips: config.circuitBreaker?.maxConsecutiveTrips,
+    maxClosedFailures: config.circuitBreaker?.maxClosedFailures,
+  });
+}
 
 export function performanceMiddleware(req: Request, res: Response, next: NextFunction): void {
   const start = performance.now();

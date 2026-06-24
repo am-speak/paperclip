@@ -45,10 +45,17 @@ function getOrCreate(key: string): CircuitBreakerEntry {
 }
 
 export function autoHealService(opts?: AutoHealServiceOptions) {
-  const openCooldownMs = opts?.openCooldownMs ?? 30_000;
-  const halfOpenMaxAttempts = opts?.halfOpenMaxAttempts ?? 3;
-  const maxConsecutiveTrips = opts?.maxConsecutiveTrips ?? 3;
-  const maxClosedFailures = opts?.maxClosedFailures ?? 10;
+  let openCooldownMs = opts?.openCooldownMs ?? 30_000;
+  let halfOpenMaxAttempts = opts?.halfOpenMaxAttempts ?? 3;
+  let maxConsecutiveTrips = opts?.maxConsecutiveTrips ?? 3;
+  let maxClosedFailures = opts?.maxClosedFailures ?? 10;
+
+  function configure(opts: AutoHealServiceOptions): void {
+    if (opts.openCooldownMs !== undefined) openCooldownMs = opts.openCooldownMs;
+    if (opts.halfOpenMaxAttempts !== undefined) halfOpenMaxAttempts = opts.halfOpenMaxAttempts;
+    if (opts.maxConsecutiveTrips !== undefined) maxConsecutiveTrips = opts.maxConsecutiveTrips;
+    if (opts.maxClosedFailures !== undefined) maxClosedFailures = opts.maxClosedFailures;
+  }
 
   function shouldCircuitBreak(route: string, method: string): boolean {
     const key = routeKey(route, method);
@@ -207,6 +214,7 @@ export function autoHealService(opts?: AutoHealServiceOptions) {
     getRouteHealth,
     resetRoute,
     resetAll,
+    configure,
   };
 }
 
