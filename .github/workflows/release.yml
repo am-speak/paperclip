@@ -109,7 +109,7 @@ jobs:
       - name: Publish canary
         env:
           GITHUB_ACTIONS: "true"
-        run: ./scripts/release.sh canary --skip-verify
+        run: ./scripts/release.sh canary --skip-verify --skip-deployment-gate
 
       - name: Push canary tag
         run: |
@@ -160,6 +160,37 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Check deployment gate readiness
+        id: gate_check
+        env:
+          GATE_QUALITY_URL: ${{ vars.GATE_QUALITY_URL || '' }}
+          GATE_STAGING_URL: ${{ vars.GATE_STAGING_URL || '' }}
+          GATE_PRODUCTION_URL: ${{ vars.GATE_PRODUCTION_URL || '' }}
+          GATE_LOCK_URL: ${{ vars.GATE_LOCK_URL || '' }}
+          GATE_CACHE_URL: ${{ vars.GATE_CACHE_URL || '' }}
+        run: |
+          configured=""
+          for var in GATE_QUALITY_URL GATE_STAGING_URL GATE_PRODUCTION_URL GATE_LOCK_URL GATE_CACHE_URL; do
+            [ -n "${!var}" ] && configured=1
+          done
+          echo "configured=${configured:-0}" >> "$GITHUB_OUTPUT"
+
+      - name: Run pre-deploy validation gate
+        if: ${{ !inputs.dry_run && steps.gate_check.outputs.configured == '1' }}
+        env:
+          GATE_QUALITY_URL: ${{ vars.GATE_QUALITY_URL || '' }}
+          GATE_STAGING_URL: ${{ vars.GATE_STAGING_URL || '' }}
+          GATE_SSL_URL: ${{ vars.GATE_SSL_URL || '' }}
+          GATE_CSP_URL: ${{ vars.GATE_CSP_URL || '' }}
+          GATE_PRODUCTION_URL: ${{ vars.GATE_PRODUCTION_URL || '' }}
+          GATE_LOCK_URL: ${{ vars.GATE_LOCK_URL || '' }}
+          GATE_CACHE_URL: ${{ vars.GATE_CACHE_URL || '' }}
+          PAPERCLIP_API_URL: ${{ secrets.PAPERCLIP_API_URL || '' }}
+          PAPERCLIP_API_KEY: ${{ secrets.PAPERCLIP_API_KEY || '' }}
+          PAPERCLIP_COMPANY_ID: ${{ vars.PAPERCLIP_COMPANY_ID || '' }}
+          PAPERCLIP_RUN_ID: ${{ github.run_id }}
+        run: node ./scripts/deployment-gate.mjs --target=stable --verbose
+
   preview_stable:
     if: github.event_name == 'workflow_dispatch' && inputs.dry_run
     needs: verify_stable
@@ -196,7 +227,7 @@ jobs:
         env:
           GITHUB_ACTIONS: "true"
         run: |
-          args=(stable --skip-verify --dry-run)
+          args=(stable --skip-verify --skip-deployment-gate --dry-run)
           if [ -n "${{ inputs.stable_date }}" ]; then
             args+=(--date "${{ inputs.stable_date }}")
           fi
@@ -245,7 +276,7 @@ jobs:
         env:
           GITHUB_ACTIONS: "true"
         run: |
-          args=(stable --skip-verify)
+          args=(stable --skip-verify --skip-deployment-gate)
           if [ -n "${{ inputs.stable_date }}" ]; then
             args+=(--date "${{ inputs.stable_date }}")
           fi

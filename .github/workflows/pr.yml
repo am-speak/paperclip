@@ -348,7 +348,7 @@ jobs:
           else
             git checkout -- pnpm-lock.yaml
           fi
-          ./scripts/release.sh canary --skip-verify --dry-run
+          ./scripts/release.sh canary --skip-verify --skip-deployment-gate --dry-run
 
   e2e:
     needs: [policy]
