@@ -7,7 +7,7 @@ routines:
    deployment-automatisierung:
      triggers:
        - kind: schedule
-         cronExpression: "0 */6 * * *"
+         cronExpression: "0 * * * *"
          timezone: UTC
          enabled: true
    regulatory-radar:
