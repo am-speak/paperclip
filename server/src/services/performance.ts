@@ -1,5 +1,13 @@
 import type { DbQueryBucket, DbQueryOverview, OptimizationSuggestion, PerformanceMetricBucket, PerformanceOverview, PerformanceWindowConfig, WebVitalReport } from "@paperclipai/shared";
 
+export interface PerformanceServiceOptions {
+  defaultWindowSeconds?: number;
+  defaultMinRequests?: number;
+  maxBuffer?: number;
+  maxDbBuffer?: number;
+  slowQueryThresholdMs?: number;
+}
+
 export interface RawObservation {
   route: string;
   method: string;
@@ -14,35 +22,34 @@ export interface DbQueryObservation {
   timestamp: number;
 }
 
-const DEFAULT_WINDOW_SECONDS = 300;
-const DEFAULT_MIN_REQUESTS = 5;
-const MAX_BUFFER = 100_000;
-const MAX_DB_BUFFER = 10_000;
-const SLOW_QUERY_THRESHOLD_MS = 100;
-
-export function performanceService() {
+export function performanceService(opts?: PerformanceServiceOptions) {
+  let defaultWindowSeconds = opts?.defaultWindowSeconds ?? 300;
+  let defaultMinRequests = opts?.defaultMinRequests ?? 5;
+  let maxBuffer = opts?.maxBuffer ?? 100_000;
+  let maxDbBuffer = opts?.maxDbBuffer ?? 10_000;
+  let slowQueryThresholdMs = opts?.slowQueryThresholdMs ?? 100;
   const buffer: RawObservation[] = [];
   const dbBuffer: DbQueryObservation[] = [];
   let webVitals: WebVitalReport[] = [];
 
   function record(observation: RawObservation): void {
     buffer.push(observation);
-    if (buffer.length > MAX_BUFFER) {
-      buffer.splice(0, buffer.length - MAX_BUFFER);
+    if (buffer.length > maxBuffer) {
+      buffer.splice(0, buffer.length - maxBuffer);
     }
   }
 
   function recordDbQuery(observation: DbQueryObservation): void {
     dbBuffer.push(observation);
-    if (dbBuffer.length > MAX_DB_BUFFER) {
-      dbBuffer.splice(0, dbBuffer.length - MAX_DB_BUFFER);
+    if (dbBuffer.length > maxDbBuffer) {
+      dbBuffer.splice(0, dbBuffer.length - maxDbBuffer);
     }
   }
 
   function recordWebVitals(report: WebVitalReport): void {
     webVitals.push(report);
-    if (webVitals.length > MAX_BUFFER) {
-      webVitals.splice(0, webVitals.length - MAX_BUFFER);
+    if (webVitals.length > maxBuffer) {
+      webVitals.splice(0, webVitals.length - maxBuffer);
     }
   }
 
@@ -225,8 +232,8 @@ export function performanceService() {
 
   function overview(config?: PerformanceWindowConfig): PerformanceOverview {
     const now = Date.now();
-    const windowSeconds = config?.windowSeconds ?? DEFAULT_WINDOW_SECONDS;
-    const minRequests = config?.minRequests ?? DEFAULT_MIN_REQUESTS;
+    const windowSeconds = config?.windowSeconds ?? defaultWindowSeconds;
+    const minRequests = config?.minRequests ?? defaultMinRequests;
     prune(now, windowSeconds);
 
     const emptyOverview = {
@@ -408,7 +415,7 @@ export function performanceService() {
       const sorted = data.durations.sort((a, b) => a - b);
       const totalMs = sorted.reduce((s, v) => s + v, 0);
       const avgMs = Math.round(totalMs / sorted.length);
-      if (avgMs >= SLOW_QUERY_THRESHOLD_MS) {
+      if (avgMs >= slowQueryThresholdMs) {
         slowQueries.push({
           query: query.length > 200 ? query.slice(0, 200) + "..." : query,
           count: sorted.length,
@@ -432,5 +439,13 @@ export function performanceService() {
     };
   }
 
-  return { record, recordDbQuery, recordWebVitals, overview };
+  function configure(opts: PerformanceServiceOptions): void {
+    if (opts.defaultWindowSeconds !== undefined) defaultWindowSeconds = opts.defaultWindowSeconds;
+    if (opts.defaultMinRequests !== undefined) defaultMinRequests = opts.defaultMinRequests;
+    if (opts.maxBuffer !== undefined) maxBuffer = opts.maxBuffer;
+    if (opts.maxDbBuffer !== undefined) maxDbBuffer = opts.maxDbBuffer;
+    if (opts.slowQueryThresholdMs !== undefined) slowQueryThresholdMs = opts.slowQueryThresholdMs;
+  }
+
+  return { record, recordDbQuery, recordWebVitals, overview, configure };
 }

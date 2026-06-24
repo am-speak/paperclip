@@ -87,6 +87,13 @@ export interface Config {
   heartbeatSchedulerIntervalMs: number;
   companyDeletionEnabled: boolean;
   telemetryEnabled: boolean;
+  performanceMaxBufferSize: number;
+  performanceMaxDbBufferSize: number;
+  performanceSlowQueryThresholdMs: number;
+  performanceCircuitBreakerOpenCooldownMs: number;
+  performanceCircuitBreakerHalfOpenMaxAttempts: number;
+  performanceCircuitBreakerMaxConsecutiveTrips: number;
+  performanceCircuitBreakerMaxClosedFailures: number;
 }
 
 function detectTailnetBindHost(): string | undefined {
@@ -333,5 +340,33 @@ export function loadConfig(): Config {
     heartbeatSchedulerIntervalMs: Math.max(10000, Number(process.env.HEARTBEAT_SCHEDULER_INTERVAL_MS) || 30000),
     companyDeletionEnabled,
     telemetryEnabled: fileConfig?.telemetry?.enabled ?? true,
+    performanceMaxBufferSize:
+      Number(process.env.PAPERCLIP_PERF_MAX_BUFFER) ||
+      fileConfig?.performance?.maxBufferSize ||
+      100_000,
+    performanceMaxDbBufferSize:
+      Number(process.env.PAPERCLIP_PERF_MAX_DB_BUFFER) ||
+      fileConfig?.performance?.maxDbBufferSize ||
+      10_000,
+    performanceSlowQueryThresholdMs:
+      Number(process.env.PAPERCLIP_PERF_SLOW_QUERY_MS) ||
+      fileConfig?.performance?.slowQueryThresholdMs ||
+      100,
+    performanceCircuitBreakerOpenCooldownMs:
+      Number(process.env.PAPERCLIP_PERF_CB_OPEN_COOLDOWN_MS) ||
+      fileConfig?.performance?.circuitBreaker?.openCooldownMs ||
+      30_000,
+    performanceCircuitBreakerHalfOpenMaxAttempts:
+      Number(process.env.PAPERCLIP_PERF_CB_HALF_OPEN_MAX) ||
+      fileConfig?.performance?.circuitBreaker?.halfOpenMaxAttempts ||
+      3,
+    performanceCircuitBreakerMaxConsecutiveTrips:
+      Number(process.env.PAPERCLIP_PERF_CB_MAX_TRIPS) ||
+      fileConfig?.performance?.circuitBreaker?.maxConsecutiveTrips ||
+      3,
+    performanceCircuitBreakerMaxClosedFailures:
+      Number(process.env.PAPERCLIP_PERF_CB_MAX_FAILURES) ||
+      fileConfig?.performance?.circuitBreaker?.maxClosedFailures ||
+      10,
   };
 }

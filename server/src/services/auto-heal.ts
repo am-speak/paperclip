@@ -1,5 +1,12 @@
 import { perfMonitor } from "../middleware/performance-monitor.js";
 
+export interface AutoHealServiceOptions {
+  openCooldownMs?: number;
+  halfOpenMaxAttempts?: number;
+  maxConsecutiveTrips?: number;
+  maxClosedFailures?: number;
+}
+
 type CircuitState = "closed" | "open" | "half_open";
 
 interface CircuitBreakerEntry {
@@ -22,11 +29,6 @@ export interface RouteHealthInfo {
   consecutiveTrips: number;
 }
 
-const OPEN_COOLDOWN_MS = 30_000;
-const HALF_OPEN_MAX_ATTEMPTS = 3;
-const MAX_CONSECUTIVE_TRIPS = 3;
-const MAX_CLOSED_FAILURES = 10;
-
 const circuitBreakers = new Map<string, CircuitBreakerEntry>();
 
 function routeKey(route: string, method: string): string {
@@ -42,13 +44,18 @@ function getOrCreate(key: string): CircuitBreakerEntry {
   return entry;
 }
 
-export function autoHealService() {
+export function autoHealService(opts?: AutoHealServiceOptions) {
+  const openCooldownMs = opts?.openCooldownMs ?? 30_000;
+  const halfOpenMaxAttempts = opts?.halfOpenMaxAttempts ?? 3;
+  const maxConsecutiveTrips = opts?.maxConsecutiveTrips ?? 3;
+  const maxClosedFailures = opts?.maxClosedFailures ?? 10;
+
   function shouldCircuitBreak(route: string, method: string): boolean {
     const key = routeKey(route, method);
     const cb = getOrCreate(key);
 
     if (cb.state === "open") {
-      if (Date.now() - cb.lastTripAt >= OPEN_COOLDOWN_MS) {
+      if (Date.now() - cb.lastTripAt >= openCooldownMs) {
         cb.state = "half_open";
         cb.halfOpenAttempts = 0;
         return false;
@@ -85,7 +92,7 @@ export function autoHealService() {
 
     if (cb.state === "half_open") {
       cb.halfOpenAttempts++;
-      if (cb.halfOpenAttempts >= HALF_OPEN_MAX_ATTEMPTS) {
+      if (cb.halfOpenAttempts >= halfOpenMaxAttempts) {
         cb.state = "open";
         cb.lastTripAt = Date.now();
         cb.consecutiveTrips++;
@@ -94,7 +101,7 @@ export function autoHealService() {
     }
 
     if (cb.state === "closed") {
-      if (cb.failureCount >= MAX_CLOSED_FAILURES) {
+      if (cb.failureCount >= maxClosedFailures) {
         cb.state = "open";
         cb.lastTripAt = Date.now();
         cb.consecutiveTrips++;

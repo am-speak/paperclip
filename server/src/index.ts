@@ -57,7 +57,7 @@ import { getBoardClaimWarningUrl, initializeBoardClaimChallenge } from "./board-
 import { maybePersistWorktreeRuntimePorts } from "./worktree-config.js";
 import { initTelemetry, getTelemetryClient } from "./telemetry.js";
 import { conflict } from "./errors.js";
-import { createDbQueryCallback } from "./middleware/performance-monitor.js";
+import { createDbQueryCallback, configurePerformanceMonitor } from "./middleware/performance-monitor.js";
 import type {
   InstanceDatabaseBackupRunResult,
   InstanceDatabaseBackupTrigger,
@@ -105,6 +105,17 @@ export async function startServer(): Promise<StartedServer> {
   // connection or the HTTP server exists — see instrumentation.ts.
   await instrumentationReady;
   let config = loadConfig();
+  configurePerformanceMonitor({
+    maxBufferSize: config.performanceMaxBufferSize,
+    maxDbBufferSize: config.performanceMaxDbBufferSize,
+    slowQueryThresholdMs: config.performanceSlowQueryThresholdMs,
+    circuitBreaker: {
+      openCooldownMs: config.performanceCircuitBreakerOpenCooldownMs,
+      halfOpenMaxAttempts: config.performanceCircuitBreakerHalfOpenMaxAttempts,
+      maxConsecutiveTrips: config.performanceCircuitBreakerMaxConsecutiveTrips,
+      maxClosedFailures: config.performanceCircuitBreakerMaxClosedFailures,
+    },
+  });
   initTelemetry({ enabled: config.telemetryEnabled });
   if (process.env.PAPERCLIP_SECRETS_PROVIDER === undefined) {
     process.env.PAPERCLIP_SECRETS_PROVIDER = config.secretsProvider;

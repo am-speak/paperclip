@@ -103,6 +103,30 @@ export const telemetryConfigSchema = z.object({
   enabled: z.boolean().default(true),
 }).default({});
 
+export const performanceCircuitBreakerConfigSchema = z.object({
+  openCooldownMs: z.number().int().min(1000).max(300000).default(30000),
+  halfOpenMaxAttempts: z.number().int().min(1).max(20).default(3),
+  maxConsecutiveTrips: z.number().int().min(1).max(20).default(3),
+  maxClosedFailures: z.number().int().min(1).max(100).default(10),
+}).default({
+  openCooldownMs: 30000,
+  halfOpenMaxAttempts: 3,
+  maxConsecutiveTrips: 3,
+  maxClosedFailures: 10,
+});
+
+export const performanceConfigSchema = z.object({
+  maxBufferSize: z.number().int().min(1000).max(1_000_000).default(100_000),
+  maxDbBufferSize: z.number().int().min(100).max(100_000).default(10_000),
+  slowQueryThresholdMs: z.number().int().min(10).max(10_000).default(100),
+  circuitBreaker: performanceCircuitBreakerConfigSchema.default({
+    openCooldownMs: 30000,
+    halfOpenMaxAttempts: 3,
+    maxConsecutiveTrips: 3,
+    maxClosedFailures: 10,
+  }),
+}).default({});
+
 export const paperclipConfigSchema = z
   .object({
     $meta: configMetaSchema,
@@ -111,6 +135,17 @@ export const paperclipConfigSchema = z
     logging: loggingConfigSchema,
     server: serverConfigSchema,
     telemetry: telemetryConfigSchema,
+    performance: performanceConfigSchema.default({
+      maxBufferSize: 100_000,
+      maxDbBufferSize: 10_000,
+      slowQueryThresholdMs: 100,
+      circuitBreaker: {
+        openCooldownMs: 30000,
+        halfOpenMaxAttempts: 3,
+        maxConsecutiveTrips: 3,
+        maxClosedFailures: 10,
+      },
+    }),
     auth: authConfigSchema.default({
       baseUrlMode: "auto",
       disableSignUp: false,
@@ -195,5 +230,7 @@ export type SecretsConfig = z.infer<typeof secretsConfigSchema>;
 export type SecretsLocalEncryptedConfig = z.infer<typeof secretsLocalEncryptedConfigSchema>;
 export type AuthConfig = z.infer<typeof authConfigSchema>;
 export type TelemetryConfig = z.infer<typeof telemetryConfigSchema>;
+export type PerformanceConfig = z.infer<typeof performanceConfigSchema>;
+export type PerformanceCircuitBreakerConfig = z.infer<typeof performanceCircuitBreakerConfigSchema>;
 export type ConfigMeta = z.infer<typeof configMetaSchema>;
 export type DatabaseBackupConfig = z.infer<typeof databaseBackupConfigSchema>;
